@@ -1,0 +1,235 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Tommaso Zazzaretti - Stacked Bars</title>
+        <script type="text/javascript" src="d3.min.js"></script>
+        <meta charset="utf-8" /> 
+        <style>
+          body{margin:0;padding:0;width:100%;height:100%;}
+        </style>
+    </head>
+  <body>
+<script type="text/javascript">
+
+  //Altezza del grafico 
+  var height = 600;
+  //Larghezza del grafico
+  var width  = 1100;
+  //Flag per capire in che stato sono
+  var state = 0; //   [0 = datapoints su asse X]   ,   [1 = datapoints su asse Y]
+  //Flag per capire se sono in animazione (all'inizio gli assi sono in animazione quindi lo setto a 1)
+  var animation = 1;
+  //Altezza unità dell'asseY (valorizzata in d3.json, ma dichiarata scope globale)
+  var dy;
+  //Larghezza unità dell'asseX (valorizzata in d3.json, ma dichiarata scope globale)
+  var dx;
+  //Larghezza barre (valorizzata in d3.json, ma dichiarata scope globale)
+  var barWidth;
+  //Somma Massima dataset
+  var maxSum;
+
+  const MORE = 1;
+
+  var margin = {top: 70, right: 70, bottom: 70, left: 70};
+  var svg = d3.select("body")
+            .append("svg").attr("id","svgBox").attr("height",height+margin.top+margin.bottom).attr("width",width+margin.left+margin.right)
+            .append("g").attr("transform", "translate(" + margin.left + "," + margin.top +")");
+
+  //Computo la somma delle variabili di ogni data point. 
+  //La somma più alta verrà usata per scalare tutti gli stacked bars
+  function getSommaVariabili(data){
+    var arraySomme = [];
+    data.forEach(function(e) { 
+      arraySomme.push((e.var1+e.var2+e.var3+e.var4+e.var5));
+    })
+    return arraySomme;
+  }
+
+  function drawAxis(yMax,xMax,labelY,labelX){
+    //Mappo il dominio dei pixel (altezza) con il dominio delle altezze degli stacked bars (se state=0)
+    var y = d3.scaleLinear().range([height, 0]).domain([0,yMax+MORE]); 
+    //Mappo il dominio dei pixel (larghezza) con il numero dei data points (se state=0)
+    var x =  d3.scaleLinear().range([0,width]).domain([0,xMax]);
+    //Creo assi con numero di ticks in funzione del dataset
+    var xAxis = d3.axisBottom(x).ticks(xMax);     
+    var yAxis = d3.axisLeft(y).ticks(yMax+MORE);  
+
+    //Disegno asse x e lo traslo in basso 
+    svg.append("g").attr("class", "x axis").attr("transform", "translate(0," + height + ")").attr("id","asseX").call(xAxis);
+    //per animazione..
+    d3.select("#asseX").select("path").attr("d","M0.5,6V0.5H0.5V6")
+
+    //Disegno asse y
+    svg.append("g").attr("class", "y axis").call(yAxis).attr("id","asseY")
+    //per animazione..
+    d3.select("#asseY").select("path").attr("d","M-6,"+height+".5H0.5V"+height+".5H-6")
+    
+    //Disegno etichetta asse Y
+    svg.append("text").attr("transform", "translate(60,-28)").attr("font-size","16px").style("text-anchor", "end").style("font-family","arial").text(labelY)
+    .attr("id","labelAsseY")
+    //Per l'animazione...
+    .attr("font-size","0px");
+
+    //Disegno etichetta asse X
+    svg.append("text").attr("transform", "translate("+(width+40)+"," + (height+45) + ")").attr("font-size","16px").style("text-anchor", "end").style("font-family","arial")
+    .text(labelX).attr("id","labelAsseX")
+    //Per l'animazione...
+    .attr("font-size","0px");
+
+    //Cambio lo style dei numeri sugli assi
+    d3.selectAll(".tick text").attr("font-size","17").attr("font-family","arial")
+    //Per l'animazione...
+    d3.select("#svgBox").selectAll(".tick").attr("opacity",0);
+
+    //Creo griglia
+    if(state==0){
+      var yAxisGrid = yAxis.ticks(yMax).tickSize(-width-60, 0).tickFormat("")
+      svg.append("g").classed('y', true).classed('grid', true).call(yAxisGrid).attr("id","griglia");
+      d3.select("#griglia").attr("opacity",0);
+    } else {
+      var xAxisGrid = xAxis.ticks(xMax).tickSize(height, 0).tickFormat("")
+      svg.append("g").classed('x', true).classed('grid', true).call(xAxisGrid).attr("id","griglia");
+      d3.select("#griglia").attr("opacity",0);
+    }
+
+    axisGrowthAnimation();
+  }
+
+  function hideAxisAnimation(yMax,xMax) {
+    //ASSI VERSO L'ORIGINE
+    d3.select("#asseY").select("path").transition().attr("d","M-6,"+height+".5H0.5V"+height+".5H-6").duration(1000);
+    d3.select("#asseX").select("path").transition().attr("d","M0.5,6V0.5H0.5V6").duration(1000)
+                                        .on("end",function() { 
+                                            d3.select("svgBox").selectAll(".tick").remove();
+                                            d3.select("#asseX").remove();
+                                            d3.select("#asseY").remove();
+                                            d3.select("#labelAsseX").remove();
+                                            d3.select("#labelAsseY").remove();
+                                            d3.select("#griglia").remove();
+                                            if(state==0) { 
+                                              state=1;
+                                              drawAxis(xMax,yMax,"Data Points","Valori quantitativi");                                      
+                                            } else { 
+                                              state=0; 
+                                              drawAxis(yMax,xMax,"Valori quantitativi","Data Points");
+                                            }
+                                        });
+    //OPACITA' DEI TICK
+    d3.select("#svgBox").selectAll(".tick").transition().attr("opacity",0).duration(1000);
+    //FONT SIZE DELLE LABEL
+    d3.select("#labelAsseX").transition().attr("font-size","0px").duration(1000);
+    d3.select("#labelAsseY").transition().attr("font-size","0px").duration(1000);
+  }
+
+  function axisGrowthAnimation(){
+    //ASSI
+    d3.select("#asseY").select("path").transition().attr("d","M-6,"+height+".5H0.5V0.5H-6").duration(1000);
+    d3.select("#asseX").select("path").transition().attr("d","M0.5,6V0.5H"+(width+60)+".5V6").duration(1000)
+    //OPACITA' DEI TICK
+    d3.select("#svgBox").selectAll(".tick").transition().attr("opacity",1).duration(1000);
+    //FONT SIZE DELLE LABEL
+    d3.select("#labelAsseX").transition().attr("font-size","16px").duration(1000);
+    d3.select("#labelAsseY").transition().attr("font-size","16px").duration(1000);
+
+    d3.select("#griglia").transition().attr("opacity",0.1).duration(1000).on("end",function() { animation = 0; });
+  }
+
+  function change(dataset,rectClass) {
+    if(state==0) {
+      svg.selectAll("rect").each(
+            function(d){ 
+              if(rectClass!=d3.select(this).attr("class")){ 
+                d3.select(this).transition().attr("opacity",0).duration(500)
+                    .on("end",function() { 
+                                    d3.select(this).remove();
+                              })
+              } else {
+                var localDy = height/(dataset.length+MORE)
+                var localDx = width/(maxSum)
+                var f = dataset[d3.select(this).attr("id")]["var"+rectClass.slice(-1)]
+                var newBarWidth = localDy/2
+                var newX = (d3.select(this).attr("id"))*localDy + localDy - newBarWidth/2
+
+                d3.select(this)
+                .transition().attr("y",0).duration(500)
+                .transition().attr("x",newX).duration(500)
+                .transition().attr("transform","rotate(-90,"+((width)/(2*(width/height)))+","+((height)/2)+")").duration(300)
+                .transition().attr("width",newBarWidth).duration(200)
+                .transition().attr("height",(f*localDx)).duration(200)
+                    
+              }
+            });
+    } else {
+      svg.selectAll("rect").each( 
+              function(d){ 
+                d3.select(this).transition().attr("opacity",0).duration(1000)
+                .on("end",function() { 
+                                d3.select(this).remove();
+                                svg.selectAll("g").each(
+                                function(d){ 
+                                  if((d3.select(this).attr("id")!==null) && ("dataPoint"==d3.select(this).attr("id").replace(/[0-9]/g, ''))){ 
+                                    d3.select(this).remove();
+                                  }
+                                });
+                          drawDataset(dataset)
+                })
+            });
+    }
+  }
+
+  function clickHandler(dataset,rectClass) {
+    if(animation==0) {
+      hideAxisAnimation(maxSum,dataset.length)
+      change(dataset,rectClass)
+      animation = 1;
+    }                                                                                        
+  }
+
+  function drawDataset(dataset){
+    var colors = ["red","orange","green","blue","grey"]
+    var heightCounter = new Array(dataset.length).fill(0);
+    var dimensioniDataset = Object.keys(dataset[0]).length;
+    
+    svg.selectAll(".rect").data(dataset).enter().append("g").classed('rect', true).attr("id",function(d,i) { return "dataPoint"+(i+1).toString(); })
+
+    for(let i = 0; i< dataset.length; i++) {
+      var gNode = d3.select("#dataPoint"+(i+1).toString());
+      for(let j = 0; j< dimensioniDataset; j++) {
+        gNode.append("rect")
+        .on("mouseover",function(){ d3.select(this).style("cursor","pointer") })
+        .on("mouseout", function(){ d3.select(this).style("cursor","standard") })
+        .on("click", function(){ clickHandler(dataset,d3.select(this).attr("class")); })
+        .attr("y", function(d){  var y = height-(d["var"+(j+1)]*dy + heightCounter[i]*dy); heightCounter[i] += d["var"+(j+1)]; return y; })
+        .attr("x", function(d){ return ((i+1)*dx)-barWidth/2; })
+        .attr("height", function(d) {return d["var"+(j+1)]*(dy); })
+        .attr("width", barWidth)
+        .attr("fill", colors[j])
+        .attr("class","rect"+(j+1).toString())
+        .attr("opacity",0)
+        .attr("id",i)
+        .transition().attr("opacity",1).duration(1000);
+      }
+    }
+      
+  }
+
+  //Main
+  d3.json("dataset.json")
+    .then(function(dataset) { 
+          //Ottengo valore più alto del grafico
+          var arraySomme = getSommaVariabili(dataset);
+          maxSum = Math.max(...arraySomme);
+          //Altezza unità dell'asseY
+          dy = (height)/(maxSum+MORE);
+          //Larghezza unità dell'asseX
+          dx = (width)/dataset.length;
+          //Larghezza rettangoli
+          barWidth = dx/1.7;
+          drawAxis(maxSum,arraySomme.length,"Valori quantitativi","Data Points");
+          drawDataset(dataset);        
+    });
+    
+                              
+</script>
+  </body>
+</html>
